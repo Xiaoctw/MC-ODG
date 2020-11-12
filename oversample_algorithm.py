@@ -8,19 +8,23 @@ from scipy.spatial.distance import cdist
 from scipy.spatial import distance_matrix
 from sklearn.cluster import DBSCAN
 from imblearn.under_sampling import EditedNearestNeighbours
+
 logging.basicConfig(level=logging.INFO)
+
+
 class ODG:
 
-    def __init__(self, eps=0.08, min_pts=4, k=5, p=2, fit_outline_radio=True, outline_radio=0.6, min_core_number=5,
-                 noise_radio=0.1, multiple_k=4, translations=True, noise_smote=True):
+    def __init__(self, eps=0.08, min_pts=4, k=5, p=2, fit_borderline_ratio=True, borderline_ratio=0.6,
+                 min_core_number=5,
+                 noise_ratio=0.1, multiple_k=4, translations=True, noise_smote=True):
         """
         :param eps: Dbscan radius size.
         :param min_pts: Minimum number of points in the region.
         :param k: The value of k nearest neighbor.
         :param p: Distance metric.
-        :param fit_outline_radio: To be or not to be adaptive to calculate the number of samples generated at the boundary point.
-        :param outline_radio:  The ratio that generates data points at the boundary point.
-        :param noise_radio: When the number of noise points is less than a certain value, no data is generated.
+        :param fit_borderline_ratio: To be or not to be adaptive to calculate the number of samples generated at the boundary point.
+        :param borderline_ratio:  The ratio that generates data points at the boundary point.
+        :param noise_ratio: When the number of noise points is less than a certain value, no data is generated.
         :param min_core_number: The minimum number of sample classes in each cluster.
         :param multiple_k: The maximum number of generated samples of a single minority class is several times that of K,
         which limits the number of generated samples to avoid generating regional malformations.
@@ -30,14 +34,14 @@ class ODG:
         """
         self.eps = eps
         self.min_pts = min_pts
-        self.outline_radio = outline_radio
-        self.noise_radio = noise_radio
+        self.borderline_ratio = borderline_ratio
+        self.noise_ratio = noise_ratio
         self.multiple_k = multiple_k
         self.k = k
         self.p = p
         self.min_core_number = min_core_number
         self.translations = translations
-        self.fit_outline_radio = fit_outline_radio
+        self.fit_borderline_radio = fit_borderline_ratio
         self.noise_smote = noise_smote
 
     def fit_sample(self, X, Y, k=-1, minority_class=None):
@@ -67,15 +71,15 @@ class ODG:
         outline_sample_indices[core_sample_indices] = 0
         outline_sample_indices = outline_sample_indices != 0
         outline_sample_indices = np.arange(num_minority)[outline_sample_indices]
-        if len(noise_sample_indices) / num_minority < self.noise_radio:
+        if len(noise_sample_indices) / num_minority < self.noise_ratio:
             num_oversample_noise = 0
         else:
             num_oversample_noise = int(self.radio_noise(len(noise_sample_indices) / num_minority) * num_oversample)
-            num_oversample_noise=min(num_oversample_noise,self.multiple_k*k*len(noise_sample_indices))
+            num_oversample_noise = min(num_oversample_noise, self.multiple_k * k * len(noise_sample_indices))
         num_oversample -= num_oversample_noise
-        if self.fit_outline_radio:
-            self.outline_radio = self.fit_alpha(len(outline_sample_indices) / num_minority)
-        num_oversample_outline = num_oversample * self.outline_radio
+        if self.fit_borderline_radio:
+            self.borderline_ratio = self.fit_alpha(len(outline_sample_indices) / num_minority)
+        num_oversample_outline = num_oversample * self.borderline_ratio
         total_k_nearest_majority = 0
         cov_cluster, cluster_size = {}, {}
         for i in range(num_cluster):
@@ -150,17 +154,17 @@ class ODG:
             if len(oversample_noise_data) > 0:
                 oversample_noise_data = np.concatenate(oversample_noise_data).reshape(-1, num_feature)
 
-        elif len(noise_sample_indices)>1:
+        elif len(noise_sample_indices) > 1:
             noise_data = minority_X[noise_sample_indices]
-            oversample_noise_data = np.random.multivariate_normal(np.mean(noise_data,axis=0), np.cov(noise_data.T),
-                                                                    num_oversample_noise)
-        if len(oversample_noise_data)>0:
+            oversample_noise_data = np.random.multivariate_normal(np.mean(noise_data, axis=0), np.cov(noise_data.T),
+                                                                  num_oversample_noise)
+        if len(oversample_noise_data) > 0:
             new_label = np.array([minority_class] * oversample_noise_data.shape[0])
             X = np.concatenate([X, oversample_noise_data])
             Y = np.concatenate([Y, new_label])
         logging.info('Number of core production points :{}, number of boundary production points :{}, number of noise '
                      'production points :{}'.format(len(oversample_core_data), len(oversample_outline_data),
-                                                  len(oversample_noise_data)))
+                                                    len(oversample_noise_data)))
         indices = np.arange(X.shape[0])
         np.random.shuffle(indices)
         X = X[indices]
@@ -188,7 +192,7 @@ class ODG:
         :param radio: Proportion of noise sample points.
         :return: Percentage of the number of points of generation of noise sample points
         """
-        a = 0.9 / (1 - self.noise_radio ** 2)
+        a = 0.9 / (1 - self.noise_ratio ** 2)
         return a * (radio ** 2) + 1 - a
 
 
@@ -237,7 +241,7 @@ class MC_ODG:
         self.multiple_k = multiple_k
         self.translations = translations
         self.fit_outline_radio = fit_outline_radio
-        self.noise_smote=noise_smote
+        self.noise_smote = noise_smote
 
     def fit_sample(self, X, Y):
         classes = np.unique(Y)
@@ -269,9 +273,9 @@ class MC_ODG:
 
             unpacked_points, unpacked_labels = helper(used_class_matrix)
             sam_method = ODG(p=self.p, k=self.k, eps=self.eps, min_pts=self.min_pts,
-                             outline_radio=self.outline_radio, translations=self.translations,
-                             fit_outline_radio=self.fit_outline_radio, noise_smote=self.noise_smote,
-                             min_core_number=self.min_core_number, noise_radio=self.noise_radio,
+                             borderline_ratio=self.outline_radio, translations=self.translations,
+                             fit_borderline_ratio=self.fit_outline_radio, noise_smote=self.noise_smote,
+                             min_core_number=self.min_core_number, noise_ratio=self.noise_radio,
                              multiple_k=self.multiple_k)
             over_sampled_points, over_sampled_labels = sam_method.fit_sample(unpacked_points, unpacked_labels,
                                                                              minority_class=tem_class)
@@ -290,5 +294,3 @@ class MC_ODG:
 
         unpacked_points, unpacked_labels = helper(class_matrix)
         return unpacked_points, unpacked_labels
-
-
