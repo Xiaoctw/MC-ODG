@@ -177,14 +177,7 @@ class ODG:
         :param val: Proportion of boundary sample points.
         :return: Percentage of the number of points of generation of boundary sample points.
         """
-        if val <= 0.01:
-            return val * 5
-        elif val <= 0.05:
-            return 4 * val
-        elif val <= 0.3:
-            return 3 * val
-        else:
-            return 0.92
+        return val ** (1 / 2)
 
     def radio_noise(self, radio):
         """
